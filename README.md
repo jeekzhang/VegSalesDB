@@ -1,4 +1,5 @@
-# Advanced Database Demo - Display of Vegetable Category Product Sales Database
+# Advanced Database Demo
+Display of Vegetable Category Product Sales Database
 
 # Powered by DuckDB-Grid
 
