@@ -1,4 +1,7 @@
-# DuckDB-Grid
+# Advanced Database Demo
+Display of Vegetable Category Product Sales Database
+
+# Powered by DuckDB-Grid
 
 [![Main](https://github.com/yeri918/duckdb-grid/actions/workflows/deployment.yaml/badge.svg)](https://github.com/yeri918/duckdb-grid/actions/workflows/deployment.yaml)
 
