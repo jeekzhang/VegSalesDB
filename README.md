@@ -16,7 +16,7 @@ Display of Vegetable Category Product Sales Database
    npm run dev
    ```
 
-4. (Optional)**Build for Production**
+4. (Optional) **Build for Production**
    ```bash
    npm run build
    ```
