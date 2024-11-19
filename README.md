@@ -1,6 +1,27 @@
 # Advanced Database Demo
 Display of Vegetable Category Product Sales Database
 
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/jeekzhang/VegSalesDB.git
+   ```
+   
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start Development Server**
+   ```bash
+   npm run dev
+   ```
+
+4. (Optional)**Build for Production**
+   ```bash
+   npm run build
+   ```
+
+
 # Powered by DuckDB-Grid
 
 [![Main](https://github.com/yeri918/duckdb-grid/actions/workflows/deployment.yaml/badge.svg)](https://github.com/yeri918/duckdb-grid/actions/workflows/deployment.yaml)
