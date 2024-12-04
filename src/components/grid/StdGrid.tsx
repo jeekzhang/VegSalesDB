@@ -115,23 +115,17 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
 
   const handleDelete = async (id: number) => {
     if (window.confirm(`Are you sure you want to delete the record with ID: ${id}?`)) {
-      const result = await dbOperations.delete(props.tableName, id);
-      if (result.success && gridApi) {
-        gridApi.refreshServerSide();
-      }
+      await dbOperations.delete(props.tableName, id);
     }
   };
 
   const handleDialogSubmit = async (data: Record<string, any>) => {
-    console.log("insert",props.tableName)
     const operation = dialogMode === 'create'
       ? () => dbOperations.add(props.tableName, data)
-      : () => dbOperations.update(props.tableName, selectedRecord!.id, data);
+      : () => dbOperations.update(props.tableName, selectedRecord!.transactionId, data);
 
-    const result = await operation();
-    if (result.success && gridApi) {
-      gridApi.refreshServerSide();
-    }
+    await operation();
+
   };
 
   useEffect(() => {
@@ -235,7 +229,7 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
             <Tooltip title="Delete">
               <IconButton
                 size="small"
-                onClick={() => handleDelete(params.data.transaction_id)}
+                onClick={() => handleDelete(params.data.transactionId)}
                 style={{ 
                   padding: 4,
                   color: props.darkMode ? '#f48fb1' : '#d32f2f'
@@ -416,9 +410,9 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
   const resetTable = () => {
     if (gridApi) {
       gridApi.refreshCells();
-      gridApi.expandAll(false);
+      gridApi.expandAll();
       gridApi.setRowGroupColumns([]);
-      gridApi.setSortModel([]);
+      // gridApi.setSortModel([]);
     }
   };
 
@@ -726,7 +720,7 @@ const DataOperationsDialog: React.FC<DataDialogProps> = ({
 }) => {
   const [formData, setFormData] = useState(initialData);
 
-  const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
       ...prev,
       [field]: event.target.value
@@ -796,7 +790,7 @@ const dbOperations = {
       await connection.query(`
         UPDATE ${tableName}
         SET ${updates}
-        WHERE id = ${id};
+        WHERE transactionId = ${id};
       `);
       return { success: true };
     } catch (error) {
@@ -812,7 +806,7 @@ const dbOperations = {
     try {
       await connection.query(`
         DELETE FROM ${tableName}
-        WHERE transaction_id = ${id};
+        WHERE transactionId = ${id};
       `);
       return { success: true };
     } catch (error) {
