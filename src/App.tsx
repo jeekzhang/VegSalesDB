@@ -22,7 +22,6 @@ import CloseIcon from "@mui/icons-material/Close";
 import { initParquetTable } from "./lib/example/initTable";
 import { IoInvertMode, IoLogoGithub, IoTerminalOutline } from "react-icons/io5";
 
-// Reference: https://stackoverflow.com/questions/40702842/how-to-import-all-modules-from-a-directory-in-typescript
 import * as load from "./lib/load";
 
 import "react-tabs/style/react-tabs.css";
@@ -54,10 +53,6 @@ const darkTheme = createTheme({
   },
 });
 
-/* 
-  ------------START OF USER EDITABLE AREA------------
-  Go through the README below to setup the table.
-*/
 function CustomTabPanel(props: TabPanelProps) {
   const { children, value, index, height, width, ...other } = props;
 
@@ -85,18 +80,104 @@ interface gridTab {
   content: JSX.Element;
 }
 
+// Add database operations
+const dbOperations = {
+  async create(tableName: string, data: Record<string, any>) {
+    const connection = await db.connect();
+    try {
+      // Get column types first
+      const columnTypesQuery = `
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = '${tableName}';
+      `;
+      const columnTypes = await connection.query(columnTypesQuery);
+      const typeMap = new Map(columnTypes.toArray().map(row => [row.column_name, row.data_type]));
+      
+      const columns = Object.keys(data);
+      const values = columns.map(col => {
+        const value = data[col];
+        const type = typeMap.get(col);
+        if (type === 'VARCHAR' || type === 'DATE') {
+          return `'${value}'`;
+        }
+        return value;
+      }).join(", ");
+
+      await connection.query(`
+        INSERT INTO ${tableName} (${columns.join(", ")})
+        VALUES (${values});
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error creating record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  },
+
+  async update(tableName: string, id: number, data: Record<string, any>) {
+    const connection = await db.connect();
+    try {
+      // Get column types first
+      const columnTypesQuery = `
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = '${tableName}';
+      `;
+      const columnTypes = await connection.query(columnTypesQuery);
+      const typeMap = new Map(columnTypes.toArray().map(row => [row.column_name, row.data_type]));
+      
+      const updates = Object.entries(data)
+        .map(([key, value]) => {
+          const type = typeMap.get(key);
+          const formattedValue = type === 'VARCHAR' || type === 'DATE' ? `'${value}'` : value;
+          return `${key} = ${formattedValue}`;
+        })
+        .join(", ");
+
+      await connection.query(`
+        UPDATE ${tableName}
+        SET ${updates}
+        WHERE id = ${id};
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  },
+
+  async delete(tableName: string, id: number) {
+    const connection = await db.connect();
+    try {
+      await connection.query(`
+        DELETE FROM ${tableName}
+        WHERE id = ${id};
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  }
+};
+
 const App: React.FC = () => {
   const [tabData, setTabData] = useState<gridTab[]>([]);
-  const [value, setValue] = React.useState(1); // Initial state of the tabs
+  const [value, setValue] = React.useState(1);
   const [monoValue, setMonoValue] = React.useState(1);
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
   const [isShellVisible, setIsShellVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  /* 
-    README: Init Steps
-  */
-  initParquetTable("./penguins.parquet", "penguins");
+
+  initParquetTable("./sales_transactions.parquet", "sales");
 
   useEffect(() => {
     const userPrefersDark =
@@ -117,54 +198,55 @@ const App: React.FC = () => {
     }
   }, [announcementVisible]);
 
-  // Tabs init
   useEffect(() => {
     const tabData = [
       {
         label: "0 - Sample",
         content: (
-          <StdAgGrid tabName="Tab1" darkMode={darkMode} tableName="penguins" />
+          <StdAgGrid 
+            tabName="Tab1" 
+            darkMode={darkMode} 
+            tableName="sales"
+          />
         ),
       },
     ];
     setTabData(tabData);
   }, []);
 
-  // Dark Mode
   useEffect(() => {
     setTabData((prevTabData) =>
       prevTabData.map((tab) => ({
         ...tab,
-        content: React.cloneElement(tab.content, { darkMode }),
+        content: React.cloneElement(tab.content, { 
+          darkMode,
+        }),
       })),
     );
   }, [darkMode]);
 
-  // render Tabs Functions
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
+
   function a11yProps(index: number) {
     return {
       id: `simple-tab-${index}`,
       "aria-controls": `simple-tabpanel-${index}`,
     };
   }
+
   const onClickAddTab = () => {
     fileInputRef.current?.click();
   };
 
-  // eslint-disable-next-line
   const handleAddTab = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event?.target.files?.[0];
     const newIndex = tabData.length;
     const tableName = `table${newIndex + 1}`;
-    console.log("leudom", file);
 
-    // Reset the input value to allow getting the same file
     event.target.value = "";
 
-    // Only action if file exists
     if (file) {
       if (file.name.endsWith(".csv")) {
         await load.CSV(file, tableName);
@@ -174,7 +256,7 @@ const App: React.FC = () => {
         await load.Parquet(file, tableName);
       }
       const newTab = {
-        label: `${monoValue} - ${file.name}`, // Tab starts at 1, 0 is the plus button
+        label: `${monoValue} - ${file.name}`,
         content: (
           <StdAgGrid
             tabName={`Tab${newIndex + 1}`}
@@ -190,24 +272,20 @@ const App: React.FC = () => {
   };
 
   const handleCloseTab = async (index: number) => {
-    setTabData((prevTabData) => prevTabData.filter((_, i) => i !== index)); // filter out the index
+    setTabData((prevTabData) => prevTabData.filter((_, i) => i !== index));
     if (value >= index) {
       setValue((prevValue) => (prevValue === 0 ? 0 : prevValue - 1));
     }
     const c = await db.connect();
     await c.query(`
       DROP TABLE table${index + 1};
-      `);
+    `);
     await c.close();
   };
 
-  function renderTabs() {
+  const renderTabs = () => {
     return (
-      <Tabs
-        value={value}
-        onChange={handleChange}
-        aria-label="basic tabs example"
-      >
+      <Tabs value={value} onChange={handleChange} aria-label="basic tabs example">
         <Tooltip title="Import an Excel, CSV, or Parquet file" arrow>
           <IconButton
             onClick={onClickAddTab}
@@ -252,21 +330,21 @@ const App: React.FC = () => {
         ))}
       </Tabs>
     );
-  }
+  };
 
-  function renderTabPanels() {
+  const renderTabPanels = () => {
     return tabData.map((tab, index) => (
       <CustomTabPanel
-        key={index} // The id to be identified
-        value={value} // The current tab selected
-        index={index + 1} // The position of the tab in the array
+        key={index}
+        value={value}
+        index={index + 1}
         height={"90%"}
         width={"95%"}
       >
         <div style={{ marginTop: -20, height: "95%" }}>{tab.content}</div>
       </CustomTabPanel>
     ));
-  }
+  };
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -282,28 +360,13 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider theme={darkTheme}>
-      <div
-        className={`app-container ${
-          announcementVisible ? "announcement-visible" : ""
-        }`}
-      >
+      <div className={`app-container ${announcementVisible ? "announcement-visible" : ""}`}>
         <AnnouncementHeader
           darkMode={darkMode}
           message={
             <>
               👋 Welcome! Click the + button to import any CSV, Excel, or
               Parquet files to get started.
-              <br />
-              🔗 The grid is secure, running only in your browser. More info in{" "}
-              <a
-                href="https://github.com/yeri918/duckdb-grid"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: darkMode ? "#90caf9" : "#1976d2" }}
-              >
-                GitHub Page
-              </a>
-              .
             </>
           }
           onClose={handleAnnouncementClose}
@@ -321,72 +384,19 @@ const App: React.FC = () => {
             top: 0,
           }}
         >
-          <h1
-            className="app-title"
-            style={{ margin: 0, fontSize: "38px", padding: "5px" }}
-          >
-            DuckGrid
+          <h1 className="app-title" style={{ margin: 0, fontSize: "38px", padding: "5px" }}>
+            Advanced Database Demo - Display of Vegetable Category Product Sales Database
           </h1>
-          <div
-            style={{
-              display: "inline-block",
-              flex: 1,
-              textAlign: "right",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "25px",
-                height: "40px",
-                display: "inline-block",
-                cursor: "pointer",
-                marginTop: "5px",
-              }}
-            >
-              <IoLogoGithub
-                onClick={() =>
-                  window.open(
-                    "https://github.com/yeri918/duckdb-grid",
-                    "_blank",
-                  )
-                }
-                color="white"
-              />
-            </div>
-            <div
-              style={{
-                fontSize: "25px",
-                height: "40px",
-                display: "inline-block",
-                cursor: "pointer",
-                marginLeft: "10px",
-                marginTop: "5px",
-              }}
-            >
+          <div style={{ display: "inline-block", flex: 1, textAlign: "right" }}>
+            <div style={{ fontSize: "25px", height: "40px", display: "inline-block", cursor: "pointer", marginTop: "5px" }}>
               <IoTerminalOutline onClick={toggleShellVisibility} />
             </div>
-            <div
-              style={{
-                fontSize: "25px",
-                height: "40px",
-                display: "inline-block",
-                cursor: "pointer",
-                marginLeft: "10px",
-              }}
-            >
+            <div style={{ fontSize: "25px", height: "40px", display: "inline-block", cursor: "pointer", marginLeft: "10px" }}>
               <IoInvertMode onClick={toggleDarkMode} />
             </div>
           </div>
 
-          <div
-            style={{
-              fontSize: "25px",
-              height: "40px",
-              display: "inline-block",
-              cursor: "pointer",
-              marginLeft: "10px",
-            }}
-          >
+          <div style={{ fontSize: "25px", height: "40px", display: "inline-block", cursor: "pointer", marginLeft: "10px" }}>
             {isShellVisible && (
               <div>
                 <Shell />
@@ -405,12 +415,7 @@ const App: React.FC = () => {
               width: "90%",
             }}
           >
-            <Box
-              sx={{
-                borderBottom: 0.5,
-                borderColor: darkMode ? "divider" : "gray",
-              }}
-            >
+            <Box sx={{ borderBottom: 0.5, borderColor: darkMode ? "divider" : "gray" }}>
               {renderTabs()}
             </Box>
             {renderTabPanels()}

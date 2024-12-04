@@ -44,9 +44,9 @@ export const initParquetTable = (filename: string, tableName: string) => {
       const c = await db.connect();
       const src = new URL(filename, document.baseURI).href;
       const source = `
-                            CREATE OR REPLACE VIEW ${tableName} AS
-                            FROM read_parquet('${src}');
-                    `;
+            CREATE OR REPLACE TABLE ${tableName} AS
+            SELECT * FROM read_parquet('${src}');
+          `;
       // await sleep(10000); // Can comment this line to check the Timeout.
       await c.query(source);
       await c.close();

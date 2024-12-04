@@ -6,7 +6,16 @@ import React, {
   useCallback,
 } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { Button, Tooltip } from "@mui/material";
+import { 
+  Button, 
+  Tooltip, 
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
+} from "@mui/material";
 import Grid from "@mui/material/Grid2";
 import Box from "@mui/material/Box";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
@@ -20,6 +29,8 @@ import {
   CountStatusBarComponentType,
   PrefetchedColumnValues,
   Context,
+  // Add
+  DataDialogProps,
 } from "./interface/GridInterface";
 import handleKeyDown from "./lib/keyShortcuts";
 import {
@@ -60,6 +71,11 @@ import "ag-grid-enterprise";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
+// Add these imports at the top of the file
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+
 function arePropsEqual(
   prevProps: StdAgGridProps,
   nextProps: StdAgGridProps,
@@ -79,6 +95,44 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
   const gridStyle = useMemo(() => ({ height: "100%", width: "100%" }), []);
   const [openGroups, setOpenGroups] = useState<string[] | undefined>([]);
   const [advancedFilterFlag, setAdvancedFilterFlag] = useState<boolean>(true); // false specifically means advanced filter has failed
+  
+  // Add these new states
+  const [openDialog, setOpenDialog] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [selectedRecord, setSelectedRecord] = useState<Record<string, any> | null>(null);
+  // Add these new handlers
+  const handleAdd = () => {
+    setDialogMode('create');
+    setSelectedRecord(null);
+    setOpenDialog(true);
+  };
+
+  const handleEdit = (record: Record<string, any>) => {
+    setDialogMode('edit');
+    setSelectedRecord(record);
+    setOpenDialog(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (window.confirm(`Are you sure you want to delete the record with ID: ${id}?`)) {
+      const result = await dbOperations.delete(props.tableName, id);
+      if (result.success && gridApi) {
+        gridApi.refreshServerSide();
+      }
+    }
+  };
+
+  const handleDialogSubmit = async (data: Record<string, any>) => {
+    console.log("insert",props.tableName)
+    const operation = dialogMode === 'create'
+      ? () => dbOperations.add(props.tableName, data)
+      : () => dbOperations.update(props.tableName, selectedRecord!.id, data);
+
+    const result = await operation();
+    if (result.success && gridApi) {
+      gridApi.refreshServerSide();
+    }
+  };
 
   useEffect(() => {
     console.log("StdAgGrid: Mounted or Rerendered");
@@ -157,7 +211,49 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
         gridApi,
       );
 
-      setColumnDefs(groupedColumnDefs);
+      // Add actions column
+      const actionsColumn = {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 120,
+        filter: false,
+        sortable: false,
+        cellRenderer: (params: any) => (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                onClick={() => handleEdit(params.data)}
+                style={{ 
+                  padding: 4,
+                  color: props.darkMode ? '#90caf9' : '#1976d2'
+                }}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton
+                size="small"
+                onClick={() => handleDelete(params.data.transaction_id)}
+                style={{ 
+                  padding: 4,
+                  color: props.darkMode ? '#f48fb1' : '#d32f2f'
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </div>
+        ),
+        cellStyle: {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }
+      };
+
+      setColumnDefs([...groupedColumnDefs, actionsColumn]);
     };
     fetchColumnDefs();
   }, []);
@@ -416,25 +512,26 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
   };
 
   return (
-    <Box
-      sx={{
-        height: isExpanded ? "90%" : "100%",
-        boxSizing: "border-box",
-        // border: "1px solid red",
-      }}
-    >
+    <Box sx={{ height: isExpanded ? "90%" : "100%", boxSizing: "border-box" }}>
       <Box sx={{ display: "flex", width: "100%" }}>
-        <Box
-          sx={{
-            p: 3,
-            mt: -3,
-            // border: "1px solid red",
-            width: "90%",
-          }}
-        >
+        <Box sx={{ p: 3, mt: -3, width: "90%" }}>
           {/* Button Container */}
           <Grid container spacing={2} alignItems="center">
-            {/* Button: Reset table */}
+            {/* New Button: Add new record */}
+            <Grid spacing={2}>
+              <Tooltip title="Add new record">
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleAdd}
+                  sx={{ width: 100, fontSize: 12 }}
+                >
+                  Add
+                </Button>
+              </Tooltip>
+            </Grid>
+  
+            {/* Original Button: Reset table */}
             <Grid spacing={2}>
               <Tooltip title="Removes the row groups and filters.">
                 <Button
@@ -446,7 +543,8 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
                 </Button>
               </Tooltip>
             </Grid>
-            {/* Button: Autosize the columns */}
+  
+            {/* Original Button: Autosize */}
             <Grid spacing={2}>
               <Tooltip title="Autosizes the columns.">
                 <Button
@@ -458,7 +556,8 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
                 </Button>
               </Tooltip>
             </Grid>
-            {/* Button: Save view */}
+  
+            {/* Original Button: Save view */}
             <Grid spacing={2}>
               <Tooltip title="Saves the current view with row groups and filters.">
                 <Button
@@ -470,12 +569,13 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
                 </Button>
               </Tooltip>
             </Grid>
+  
+            {/* Original Button: Load view */}
             <Grid>
               <Tooltip title="Retrieve the saved view.">
                 <Button
                   variant="contained"
                   onClick={() => {
-                    // Might need to refactor too.
                     applySavedState(gridApi, props.tableName, "manual");
                     fetchPreviousState(props.tableName, "manual").then(
                       (result: any) => {
@@ -495,7 +595,8 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
                 </Button>
               </Tooltip>
             </Grid>
-            {/* Button: Collapse/Expand for more buttons.  */}
+  
+            {/* Original Button: Expand/Collapse */}
             <Grid spacing={2}>
               <Tooltip title={isExpanded ? "Collapse" : "Expand"}>
                 <Button
@@ -508,18 +609,19 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
                 </Button>
               </Tooltip>
             </Grid>
-            {/* Execution Time render */}
-            <Grid
-              container
-              justifyContent="space-between"
-              sx={{
-                display: "flex",
-                mb: 1,
-                // border: "1px solid red",
-              }}
-            ></Grid>
           </Grid>
-          {/* Additional Buttons */}
+  
+          {/* CRUD Operations Dialog */}
+          <DataOperationsDialog
+            open={openDialog}
+            mode={dialogMode}
+            onClose={() => setOpenDialog(false)}
+            onSubmit={handleDialogSubmit}
+            initialData={selectedRecord || {}}
+            fields={columnDefs.filter(col => col.field !== 'actions').map(col => col.field)}
+          />
+  
+          {/* Additional Advanced Filter Section */}
           {isExpanded && (
             <Box sx={{ mt: 2, width: "100%" }}>
               <Grid sx={{ xs: 12, width: "100%" }}>
@@ -532,30 +634,16 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
             </Box>
           )}
         </Box>
-        <Box
-          sx={{
-            p: 3,
-            // border: "1px solid red",
-            width: "10%",
-            position: "relative",
-          }}
-        >
-          <Grid
-            sx={{
-              position: "absolute",
-              top: 10,
-              right: 10,
-              mb: 1,
-            }}
-          >
+  
+        {/* Execution Time Display */}
+        <Box sx={{ p: 3, width: "10%", position: "relative" }}>
+          <Grid sx={{ position: "absolute", top: 10, right: 10, mb: 1 }}>
             <div>{renderExecutionTime()}</div>
           </Grid>
         </Box>
       </Box>
-
-      {/* 
-      // endregion 
-      */}
+  
+      {/* AG Grid Component */}
       <div
         style={gridStyle}
         className={
@@ -624,6 +712,116 @@ const StdAgGrid: React.FC<StdAgGridProps> = (props) => {
       </div>
     </Box>
   );
+};
+
+
+// Add this new component
+const DataOperationsDialog: React.FC<DataDialogProps> = ({
+  open,
+  mode,
+  onClose,
+  onSubmit,
+  initialData = {},
+  fields
+}) => {
+  const [formData, setFormData] = useState(initialData);
+
+  const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleSubmit = () => {
+    onSubmit(formData);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{mode === 'create' ? 'Add New Record' : 'Edit Record'}</DialogTitle>
+      <DialogContent>
+        {fields.map(field => (
+          <TextField
+            key={field}
+            label={field}
+            value={formData[field] || ''}
+            onChange={handleChange(field)}
+            fullWidth
+            margin="normal"
+          />
+        ))}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} color="primary">
+          {mode === 'create' ? 'Create' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+// Add these database operations
+const dbOperations = {
+  async add(tableName: string, data: Record<string, any>) {
+    const connection = await db.connect();
+    const columns = Object.keys(data).join(", ");
+    const values = Object.values(data)
+      .map(value => typeof value === 'string' ? `'${value}'` : value)
+      .join(", ");
+
+    try {
+      await connection.query(`
+        INSERT INTO "${tableName}" (${columns})
+        VALUES (${values});
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error creating record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  },
+
+  async update(tableName: string, id: number, data: Record<string, any>) {
+    const connection = await db.connect();
+    const updates = Object.entries(data)
+      .map(([key, value]) => `${key} = ${typeof value === 'string' ? `'${value}'` : value}`)
+      .join(", ");
+    
+    try {
+      await connection.query(`
+        UPDATE ${tableName}
+        SET ${updates}
+        WHERE id = ${id};
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  },
+
+  async delete(tableName: string, id: number) {
+    const connection = await db.connect();
+    try {
+      await connection.query(`
+        DELETE FROM ${tableName}
+        WHERE transaction_id = ${id};
+      `);
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      return { success: false, error };
+    } finally {
+      await connection.close();
+    }
+  }
 };
 
 // export default StdAgGrid;

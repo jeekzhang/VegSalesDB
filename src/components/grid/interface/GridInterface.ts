@@ -74,3 +74,13 @@ export interface Context {
   advancedFilter: string;
 }
 // endregion
+
+export interface DataDialogProps {
+  open: boolean;
+  mode: 'create' | 'edit';
+  onClose: () => void;
+  onSubmit: (data: Record<string, any>) => void;
+  initialData?: Record<string, any>;
+  fields: string[];
+}
+
